@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import '../models/plant.dart';
 import '../services/gemini_service.dart';
+import '../services/weather_service.dart';
+import 'add_plant_form.dart';
 
 class ExplorePage extends StatefulWidget {
   const ExplorePage({super.key});
@@ -118,7 +121,11 @@ class _ExplorePageState extends State<ExplorePage> {
     ScanResult? result;
     String? error;
     try {
-      result = await scanPlant(image, mode);
+      final w = weatherStore.today;
+      final place = w == null
+          ? weatherStore.city
+          : '${weatherStore.city} (suhu tertinggi hari ini sekitar ${w.tempMax.round()}°C, peluang hujan ${w.rainChance}%)';
+      result = await scanPlant(image, mode, place: place);
     } on ScanException catch (e) {
       error = e.message;
     } catch (_) {
@@ -137,10 +144,11 @@ class _ExplorePageState extends State<ExplorePage> {
     }
   }
 
-  Future<void> _showScanResult(ScanMode mode, File image, ScanResult result) async {
+  void _showScanResult(ScanMode mode, File image, ScanResult result) {
     final sci = result.scientificName;
     final hasSci = sci != null && sci.isNotEmpty && sci != 'null';
     final pct = (result.confidence * 100).round();
+    final matches = catalogMatches(result.title);
 
     showModalBottomSheet(
       context: context,
@@ -202,6 +210,50 @@ class _ExplorePageState extends State<ExplorePage> {
                     decoration: BoxDecoration(color: context.tint, borderRadius: BorderRadius.circular(10)),
                     child: Text(result.summary, style: TextStyle(fontSize: 15, height: 1.5)),
                   ),
+                  if (mode == ScanMode.identify && result.plantable != null) ...[
+                    SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: _plantableColor(result.plantable!).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: _plantableColor(result.plantable!)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.location_on_outlined, size: 18, color: _plantableColor(result.plantable!)),
+                              SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'Layak ditanam di ${weatherStore.city}? ${result.plantable}',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (result.plantableNote != null) ...[
+                            SizedBox(height: 6),
+                            Text(result.plantableNote!, style: TextStyle(height: 1.4)),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (mode == ScanMode.identify && matches.isNotEmpty) ...[
+                    SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context); // tutup hasil
+                        _addFromScan(matches);
+                      },
+                      icon: Icon(Icons.add),
+                      label: Text('Tambah ke kebunku'),
+                    ),
+                  ],
                   if (result.causes.isNotEmpty) _resultSection('Kemungkinan penyebab', result.causes),
                   if (result.advice.isNotEmpty)
                     _resultSection(mode == ScanMode.identify ? 'Tips perawatan' : 'Saran penanganan', result.advice),
@@ -217,6 +269,44 @@ class _ExplorePageState extends State<ExplorePage> {
         );
       },
     );
+  }
+
+  /// Membuka form tambah tanaman dengan jenis yang sudah terisi dari hasil scan.
+  Future<void> _addFromScan(Map<PlantCategory, String> matches) async {
+    PlantCategory? category;
+    if (matches.length == 1) {
+      category = matches.keys.first;
+    } else {
+      category = await showModalBottomSheet<PlantCategory>(
+        context: context,
+        builder: (context) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('Ditanam sebagai apa?',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+              for (final c in matches.keys)
+                ListTile(
+                  title: Text(c.label),
+                  onTap: () => Navigator.pop(context, c),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (category == null || !mounted) return;
+    showAddPlantForm(context, category, initialType: matches[category]);
+  }
+
+  Color _plantableColor(String v) {
+    final t = v.toLowerCase();
+    if (t.contains('tidak')) return AppColors.danger;
+    if (t.contains('kurang')) return AppColors.harvest;
+    return AppColors.primary;
   }
 
   Widget _resultSection(String title, List<String> items) {

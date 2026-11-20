@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../data/profile_store.dart';
 import '../theme/app_theme.dart';
 import 'dashboard_page.dart';
 import 'register_page.dart';
@@ -25,8 +26,9 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _login() {
-    if (_emailController.text != 'admin@mail.com' ||
-        _passwordController.text != '12345') {
+    final emailOk = _emailController.text.trim().toLowerCase() ==
+        profileStore.email.toLowerCase();
+    if (!emailOk || _passwordController.text != profileStore.password) {
       setState(() => _error = 'Email atau kata sandi salah. Coba cek lagi.');
       return;
     }
@@ -62,12 +64,12 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   SizedBox(height: 28),
                   Text(
-                    'Selamat datang',
+                    'Selamat datang kembali',
                     style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
                   ),
                   SizedBox(height: 6),
                   Text(
-                    'Masuk untuk melihat kondisi kebunmu',
+                    'Masuk untuk melihat kondisi tanamanmu.',
                     style: TextStyle(color: context.muted),
                   ),
                   SizedBox(height: 32),

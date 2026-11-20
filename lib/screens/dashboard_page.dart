@@ -1,8 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../theme/app_theme.dart';
 import '../data/plant_store.dart';
+import '../data/profile_store.dart';
 import '../services/weather_service.dart';
 import 'explore_page.dart';
+import 'login_page.dart';
 import 'monitoring_page.dart';
 import 'recap_page.dart';
 
@@ -23,45 +27,245 @@ class _DashboardPageState extends State<DashboardPage> {
     weatherStore.init();
   }
 
+  Widget _avatar(double radius) {
+    final path = profileStore.photoPath;
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: AppColors.primary,
+      backgroundImage: path == null ? null : FileImage(File(path)),
+      child: path == null
+          ? Icon(Icons.person, size: radius, color: Colors.white)
+          : null,
+    );
+  }
+
   void _showProfileSheet() {
     showModalBottomSheet(
       context: context,
-      builder: (context) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
+      isScrollControlled: true,
+      builder: (sheetContext) => ListenableBuilder(
+        listenable: profileStore,
+        builder: (context, _) => Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                onTap: _changePhoto,
+                child: Stack(
+                  alignment: Alignment.bottomRight,
+                  children: [
+                    _avatar(44),
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.line),
+                      ),
+                      child: const Icon(Icons.camera_alt,
+                          color: AppColors.primary, size: 16),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(profileStore.name,
+                  style: const TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.w800)),
+              Text(profileStore.email,
+                  style: TextStyle(color: context.muted)),
+              const SizedBox(height: 16),
+              _sheetTile(Icons.person_outline, 'Ubah data diri',
+                  'Nama dan email', _editProfile),
+              _sheetTile(
+                  Icons.lock_outline, 'Ubah kata sandi', null, _changePassword),
+              _sheetTile(Icons.logout, 'Keluar', null, _logout, danger: true),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _changePhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            GestureDetector(
-              onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Membuka galeri...')),
-              ),
-              child: Stack(
-                alignment: Alignment.bottomRight,
-                children: [
-                  const CircleAvatar(
-                    radius: 42,
-                    backgroundColor: AppColors.primary,
-                    child: Icon(Icons.person, size: 46, color: Colors.white),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.line),
-                    ),
-                    child: const Icon(Icons.camera_alt,
-                        color: AppColors.primary, size: 16),
-                  ),
-                ],
-              ),
+            ListTile(
+              leading: Icon(Icons.camera_alt_outlined, color: context.accent),
+              title: const Text('Ambil foto'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
             ),
-            const SizedBox(height: 16),
-            _sheetTile(Icons.person_outline, 'Ubah data diri', 'Nama dan email'),
-            _sheetTile(Icons.lock_outline, 'Ubah kata sandi', null),
+            ListTile(
+              leading:
+                  Icon(Icons.photo_library_outlined, color: context.accent),
+              title: const Text('Pilih dari galeri'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
           ],
         ),
       ),
+    );
+    if (source == null) return;
+
+    final picked = await ImagePicker()
+        .pickImage(source: source, maxWidth: 800, imageQuality: 85);
+    if (picked != null) profileStore.setPhoto(picked.path);
+  }
+
+  Future<void> _editProfile() async {
+    final nameC = TextEditingController(text: profileStore.name);
+    final emailC = TextEditingController(text: profileStore.email);
+    final formKey = GlobalKey<FormState>();
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Ubah data diri'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: nameC,
+                decoration: const InputDecoration(labelText: 'Nama'),
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Nama wajib diisi' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: emailC,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(labelText: 'Email'),
+                validator: (v) =>
+                    RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v?.trim() ?? '')
+                        ? null
+                        : 'Format email tidak valid',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) Navigator.pop(context, true);
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+
+    if (saved == true) {
+      profileStore.updateInfo(
+          name: nameC.text.trim(), email: emailC.text.trim());
+    }
+  }
+
+  Future<void> _changePassword() async {
+    final oldC = TextEditingController();
+    final newC = TextEditingController();
+    final confirmC = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Ubah kata sandi'),
+        content: Form(
+          key: formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: oldC,
+                  obscureText: true,
+                  decoration:
+                      const InputDecoration(labelText: 'Kata sandi lama'),
+                  validator: (v) =>
+                      v == profileStore.password ? null : 'Kata sandi lama salah',
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: newC,
+                  obscureText: true,
+                  decoration:
+                      const InputDecoration(labelText: 'Kata sandi baru'),
+                  validator: (v) => (v == null || v.length < 5)
+                      ? 'Minimal 5 karakter'
+                      : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: confirmC,
+                  obscureText: true,
+                  decoration:
+                      const InputDecoration(labelText: 'Ulangi kata sandi baru'),
+                  validator: (v) =>
+                      v == newC.text ? null : 'Kata sandi tidak sama',
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) Navigator.pop(context, true);
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+
+    if (saved == true) {
+      profileStore.changePassword(newC.text);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kata sandi berhasil diubah.')),
+      );
+    }
+  }
+
+  Future<void> _logout() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Keluar dari akun?'),
+        content: const Text('Kamu akan kembali ke halaman masuk.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Keluar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    // Hapus semua halaman dari tumpukan, lalu buka halaman masuk.
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => LoginPage()),
+      (route) => false,
     );
   }
 
@@ -181,12 +385,19 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _sheetTile(IconData icon, String title, String? subtitle) {
+  Widget _sheetTile(
+    IconData icon,
+    String title,
+    String? subtitle,
+    VoidCallback onTap, {
+    bool danger = false,
+  }) {
     return ListTile(
-      leading: Icon(icon, color: context.accent),
-      title: Text(title),
+      leading: Icon(icon, color: danger ? AppColors.danger : context.accent),
+      title: Text(title,
+          style: TextStyle(color: danger ? AppColors.danger : null)),
       subtitle: subtitle == null ? null : Text(subtitle),
-      onTap: () {},
+      onTap: onTap,
     );
   }
 
@@ -208,7 +419,13 @@ class _DashboardPageState extends State<DashboardPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Hi User,', style: TextStyle(color: context.muted)),
+                        ListenableBuilder(
+                          listenable: profileStore,
+                          builder: (context, _) => Text(
+                            'Hi ${profileStore.name},',
+                            style: TextStyle(color: context.muted),
+                          ),
+                        ),
                         const SizedBox(height: 2),
                         Text('Mari kita lihat kebunmu',
                             style: TextStyle(
@@ -218,9 +435,15 @@ class _DashboardPageState extends State<DashboardPage> {
                       ],
                     ),
                   ),
-                  IconButton(
-                    icon: Icon(Icons.person_outline, color: context.ink),
-                    onPressed: _showProfileSheet,
+                  GestureDetector(
+                    onTap: _showProfileSheet,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: ListenableBuilder(
+                        listenable: profileStore,
+                        builder: (context, _) => _avatar(16),
+                      ),
+                    ),
                   ),
                   IconButton(
                     icon: Icon(Icons.settings_outlined, color: context.ink),
@@ -293,11 +516,12 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     );
     if (name == null || name.isEmpty) return;
-    final ok = await weatherStore.setCity(name);
-    if (!mounted || ok) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Kota "$name" tidak ditemukan.')),
+      SnackBar(content: Text('Mencari "$name"...')),
     );
+    final error = await weatherStore.setCity(name);
+    if (!mounted || error == null) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
   }
 
   Widget _weatherTile() {

@@ -60,17 +60,31 @@ class WeatherStore extends ChangeNotifier {
         return 'Izin lokasi diblokir. Aktifkan lewat pengaturan aplikasi di HP.';
       }
 
-      final pos = await Geolocator.getCurrentPosition(
+      // Pakai posisi terakhir yang diketahui kalau ada (cepat),
+      // kalau tidak baru minta GPS.
+      Position? pos;
+      try {
+        pos = await Geolocator.getLastKnownPosition();
+      } catch (_) {}
+      pos ??= await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.medium,
-          timeLimit: Duration(seconds: 20),
+          timeLimit: Duration(seconds: 30),
         ),
       );
       lat = pos.latitude;
       lon = pos.longitude;
-      city = await _placeName(lat, lon) ?? 'Lokasi HP';
+      city = 'Lokasi HP';
       usingGps = true;
+
+      // Cuaca dimuat bersamaan dengan pencarian nama tempat.
+      final nameFuture = _placeName(lat, lon);
       await refresh();
+      final name = await nameFuture;
+      if (name != null) {
+        city = name;
+        notifyListeners();
+      }
       return null;
     } on TimeoutException {
       return 'Lokasi terlalu lama didapat. Coba lagi di tempat terbuka.';
@@ -137,7 +151,7 @@ class WeatherStore extends ChangeNotifier {
         'timezone': 'auto',
         'forecast_days': '3',
       });
-      final res = await http.get(uri).timeout(const Duration(seconds: 15));
+      final res = await http.get(uri).timeout(const Duration(seconds: 25));
       if (res.statusCode != 200) throw Exception('kode ${res.statusCode}');
 
       final daily = jsonDecode(res.body)['daily'] as Map<String, dynamic>;
@@ -168,19 +182,23 @@ class WeatherStore extends ChangeNotifier {
   }
 
   /// Mencari kota, menyimpan koordinatnya, lalu memuat cuacanya.
-  /// Mengembalikan false kalau kota tidak ditemukan.
-  Future<bool> setCity(String name) async {
+  /// Mengembalikan null kalau berhasil, atau pesan kalau gagal.
+  Future<String?> setCity(String name) async {
     try {
       final uri = Uri.https('geocoding-api.open-meteo.com', '/v1/search', {
         'name': name,
         'count': '1',
         'format': 'json',
       });
-      final res = await http.get(uri).timeout(const Duration(seconds: 15));
-      if (res.statusCode != 200) return false;
+      final res = await http.get(uri).timeout(const Duration(seconds: 25));
+      if (res.statusCode != 200) {
+        return 'Layanan pencarian kota sedang bermasalah. Coba lagi.';
+      }
 
       final results = jsonDecode(res.body)['results'] as List?;
-      if (results == null || results.isEmpty) return false;
+      if (results == null || results.isEmpty) {
+        return 'Kota "$name" tidak ditemukan.';
+      }
 
       final r = results.first as Map<String, dynamic>;
       city = r['name'] as String;
@@ -188,9 +206,13 @@ class WeatherStore extends ChangeNotifier {
       lat = (r['latitude'] as num).toDouble();
       lon = (r['longitude'] as num).toDouble();
       await refresh();
-      return true;
+      return null;
+    } on SocketException {
+      return 'Tidak ada koneksi internet.';
+    } on TimeoutException {
+      return 'Koneksi lambat. Coba lagi sebentar.';
     } catch (_) {
-      return false;
+      return 'Pencarian kota gagal. Coba lagi.';
     }
   }
 }

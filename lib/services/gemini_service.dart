@@ -3,11 +3,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 
-// Tempel API key di defaultValue, atau jalankan dengan:
+// API key jangan ditulis di sini. Jalankan dengan:
 // flutter run --dart-define=GEMINI_API_KEY=kunci_kamu
-// Jangan unggah key asli ke GitHub publik.
+// atau: flutter run --dart-define-from-file=env.json
 const String _apiKey =
     String.fromEnvironment('GEMINI_API_KEY', defaultValue: 'ISI_API_KEY_KAMU');
+
 // Google sering memperbarui nama model. Kalau muncul error 404,
 // cek nama model terbaru di AI Studio lalu ganti di sini.
 const String _model = 'gemini-4-hydrogen';
@@ -30,6 +31,8 @@ class ScanResult {
   final List<String> causes; // kemungkinan penyebab
   final List<String> advice; // saran
   final double confidence; // 0 sampai 1
+  final String? plantable; // Cocok, Kurang cocok, atau Tidak cocok
+  final String? plantableNote; // alasan layak atau tidaknya ditanam
 
   ScanResult({
     required this.isPlant,
@@ -39,6 +42,8 @@ class ScanResult {
     required this.causes,
     required this.advice,
     required this.confidence,
+    this.plantable,
+    this.plantableNote,
   });
 
   factory ScanResult.fromJson(Map<String, dynamic> j) => ScanResult(
@@ -49,27 +54,42 @@ class ScanResult {
         causes: _stringList(j['causes']),
         advice: _stringList(j['advice']),
         confidence: (j['confidence'] as num?)?.toDouble() ?? 0,
+        plantable: _clean(j['plantable']),
+        plantableNote: _clean(j['plantable_note']),
       );
 }
 
 List<String> _stringList(dynamic v) =>
     v is List ? v.map((e) => e.toString()).toList() : <String>[];
 
-String _prompt(ScanMode mode) {
+/// Mengubah nilai kosong atau tulisan "null" menjadi null sungguhan.
+String? _clean(dynamic v) {
+  if (v is! String) return null;
+  final t = v.trim();
+  return (t.isEmpty || t.toLowerCase() == 'null') ? null : t;
+}
+
+String _prompt(ScanMode mode, String? place) {
   const format = '''
 Balas HANYA dengan JSON tanpa teks lain, dengan bentuk:
-{"is_plant": true, "title": "...", "scientific_name": "... atau null", "summary": "...", "causes": ["..."], "advice": ["..."], "confidence": 0.0}
+{"is_plant": true, "title": "...", "scientific_name": "... atau null", "summary": "...", "causes": ["..."], "advice": ["..."], "confidence": 0.0, "plantable": "... atau null", "plantable_note": "... atau null"}
 Jika foto bukan tanaman atau terlalu buram, isi is_plant dengan false dan jelaskan singkat di summary.
 Gunakan bahasa Indonesia yang sederhana. Jangan mengarang. Jika ragu, turunkan confidence.''';
 
   switch (mode) {
     case ScanMode.identify:
+      final layak = place == null
+          ? ' Isi plantable dan plantable_note dengan null.'
+          : ' Pengguna berada di $place. Isi plantable dengan tepat salah satu: '
+              '"Cocok", "Kurang cocok", atau "Tidak cocok" untuk ditanam di lokasi itu, '
+              'dan plantable_note dengan alasan satu sampai dua kalimat '
+              'soal iklim, suhu, sinar matahari, dan kebutuhan air.';
       return 'Kenali tanaman pada foto ini. '
           'title adalah nama umum dalam bahasa Indonesia, '
           'scientific_name adalah nama ilmiahnya, '
           'summary adalah ciri yang terlihat pada foto, '
           'causes dikosongkan, '
-          'advice berisi tips perawatan singkat. $format';
+          'advice berisi tips perawatan singkat.$layak $format';
     case ScanMode.diagnose:
       return 'Periksa kondisi tanaman pada foto ini. '
           'title adalah gejala atau kondisi yang terlihat (misalnya daun menguning), '
@@ -77,12 +97,18 @@ Gunakan bahasa Indonesia yang sederhana. Jangan mengarang. Jika ragu, turunkan c
           'summary adalah deskripsi gejala, '
           'causes adalah kemungkinan penyebab, urut dari yang paling mungkin, '
           'advice adalah langkah penanganan. '
+          'Isi plantable dan plantable_note dengan null. '
           'Ingatkan bahwa penyebab pastinya perlu dicek langsung. $format';
   }
 }
 
 /// Mengirim foto ke Gemini dan mengembalikan hasil yang sudah diurai.
-Future<ScanResult> scanPlant(File image, ScanMode mode) async {
+/// [place] = keterangan lokasi dan cuaca pengguna (untuk menilai layak tanam).
+Future<ScanResult> scanPlant(File image, ScanMode mode, {String? place}) async {
+  if (_apiKey == 'ISI_API_KEY_KAMU') {
+    throw ScanException('API key belum diisi. Lihat petunjuk di README.');
+  }
+
   final bytes = await image.readAsBytes();
   final uri = Uri.parse(
       'https://generativelanguage.googleapis.com/v1beta/models/$_model:generateContent');
@@ -106,17 +132,19 @@ Future<ScanResult> scanPlant(File image, ScanMode mode) async {
                       'data': base64Encode(bytes),
                     }
                   },
-                  {'text': _prompt(mode)},
+                  {'text': _prompt(mode, place)},
                 ]
               }
             ],
             'generationConfig': {
               'responseMimeType': 'application/json',
               'temperature': 0.2,
+              // Berpikir singkat supaya jawaban lebih cepat.
+              'thinkingConfig': {'thinkingLevel': 'low'},
             },
           }),
         )
-        .timeout(const Duration(seconds: 45));
+        .timeout(const Duration(seconds: 60));
   } on SocketException {
     throw ScanException('Tidak ada koneksi internet.');
   } on TimeoutException {

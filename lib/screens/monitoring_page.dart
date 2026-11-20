@@ -14,8 +14,125 @@ class MonitoringPage extends StatefulWidget {
 
 class _MonitoringPageState extends State<MonitoringPage> {
   // State untuk filter grafik
-  String _selectedTimeFilter = 'Minggu';
-  final List<String> _timeFilters = ['Minggu', 'Bulan', '6 Bulan', 'Tahun', '5 Tahun'];
+  String _selectedTimeFilter = 'Minggu Ini';
+  final List<String> _timeFilters = ['Minggu Ini', 'Bulan Ini', '6 Bulan Ini'];
+
+  // State untuk filter jenis tanaman (null = semua)
+  PlantCategory? _categoryFilter;
+
+  /// Data grafik: jumlah aksi perawatan per kelompok waktu.
+  List<_Bar> _chartBars() {
+    final today = DateTime.now();
+    final bars = <_Bar>[];
+
+    if (_selectedTimeFilter == 'Minggu Ini') {
+      // Senin sampai Minggu pada minggu ini
+      const names = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+      final monday = today.subtract(Duration(days: today.weekday - 1));
+      for (var i = 0; i < 7; i++) {
+        final d = DateTime(monday.year, monday.month, monday.day + i);
+        bars.add(_Bar(names[i], plantStore.activityOn(d)));
+      }
+    } else if (_selectedTimeFilter == 'Bulan Ini') {
+      // Per minggu dalam bulan ini
+      final dim = DateTime(today.year, today.month + 1, 0).day;
+      final weeks = ((dim - 1) ~/ 7) + 1;
+      for (var w = 0; w < weeks; w++) {
+        final end = (w * 7 + 7) > dim ? dim : (w * 7 + 7);
+        var sum = 0;
+        for (var d = w * 7 + 1; d <= end; d++) {
+          sum += plantStore.activityOn(DateTime(today.year, today.month, d));
+        }
+        bars.add(_Bar('Mg ${w + 1}', sum));
+      }
+    } else {
+      // 6 bulan terakhir, per bulan
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+      for (var k = 5; k >= 0; k--) {
+        final first = DateTime(today.year, today.month - k, 1);
+        final days = DateTime(first.year, first.month + 1, 0).day;
+        var sum = 0;
+        for (var d = 1; d <= days; d++) {
+          sum += plantStore.activityOn(DateTime(first.year, first.month, d));
+        }
+        bars.add(_Bar(months[first.month - 1], sum));
+      }
+    }
+    return bars;
+  }
+
+  Widget _buildChart() {
+    final bars = _chartBars();
+    final maxValue = bars.fold<int>(0, (m, b) => b.value > m ? b.value : m);
+
+    final boxDecoration = BoxDecoration(
+      color: context.bg,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: context.line),
+    );
+
+    if (maxValue == 0) {
+      return Container(
+        height: 180,
+        width: double.infinity,
+        decoration: boxDecoration,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.bar_chart_outlined, size: 60, color: context.line),
+            SizedBox(height: 8),
+            Text('Belum ada aktivitas di periode ini', style: TextStyle(color: context.muted)),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      height: 180,
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(12, 12, 12, 8),
+      decoration: boxDecoration,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          for (final b in bars)
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text('${b.value}', style: TextStyle(fontSize: 11, color: context.muted)),
+                  SizedBox(height: 4),
+                  Container(
+                    height: b.value == 0 ? 4.0 : (90.0 * b.value / maxValue).clamp(4.0, 90.0),
+                    margin: EdgeInsets.symmetric(horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: b.value > 0 ? AppColors.primary : context.line,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                  SizedBox(height: 6),
+                  Text(b.label, style: TextStyle(fontSize: 11, color: context.muted)),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _categoryChip(PlantCategory? category, String label) {
+    final selected = _categoryFilter == category;
+    return Padding(
+      padding: EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        selectedColor: category?.color ?? AppColors.primary,
+        labelStyle: TextStyle(color: selected ? Colors.white : context.ink),
+        onSelected: (_) => setState(() => _categoryFilter = category),
+      ),
+    );
+  }
 
  
 
@@ -122,7 +239,7 @@ class _MonitoringPageState extends State<MonitoringPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Pertumbuhan tanaman', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text('Aktivitas perawatan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   SizedBox(height: 15),
                   
                   // Deretan Filter (Bisa discroll menyamping jika kepanjangan)
@@ -152,22 +269,10 @@ class _MonitoringPageState extends State<MonitoringPage> {
                   ),
                   SizedBox(height: 20),
                   
-                  // Area Placeholder Grafik
-                  Container(
-                    height: 180,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: context.bg,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: context.line),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.show_chart, size: 80, color: context.accent),
-                        Text('Grafik $_selectedTimeFilter akan muncul di sini', style: TextStyle(color: context.muted)),
-                      ],
-                    ),
+                  // Grafik aktivitas perawatan (otomatis diperbarui)
+                  ListenableBuilder(
+                    listenable: plantStore,
+                    builder: (context, _) => _buildChart(),
                   ),
                 ],
               ),
@@ -178,17 +283,16 @@ class _MonitoringPageState extends State<MonitoringPage> {
             // --- BAGIAN BAWAH: LIST TANAMAN ---
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Text('Tanamanmu', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+            SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.symmetric(horizontal: 20),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Tanamanmu', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  // Tombol Sortir/Filter
-                  IconButton(
-                    icon: Icon(Icons.filter_list, color: context.accent),
-                    onPressed: () {
-                      // Munculkan popup sortir (nama, tanggal tambah, dll)
-                    },
-                  ),
+                  _categoryChip(null, 'Semua'),
+                  for (final c in PlantCategory.values) _categoryChip(c, c.label),
                 ],
               ),
             ),
@@ -197,9 +301,12 @@ class _MonitoringPageState extends State<MonitoringPage> {
             ListenableBuilder(
               listenable: plantStore,
               builder: (context, _) {
-                final plants = plantStore.plants;
+                final all = plantStore.plants;
+                final plants = _categoryFilter == null
+                    ? all
+                    : all.where((p) => p.category == _categoryFilter).toList();
 
-                if (plants.isEmpty) {
+                if (all.isEmpty) {
                   return Padding(
                     padding: EdgeInsets.only(top: 60.0),
                     child: Center(
@@ -215,6 +322,15 @@ class _MonitoringPageState extends State<MonitoringPage> {
                           ),
                         ],
                       ),
+                    ),
+                  );
+                }
+
+                if (plants.isEmpty) {
+                  return Padding(
+                    padding: EdgeInsets.only(top: 40),
+                    child: Center(
+                      child: Text('Belum ada tanaman di kategori ini', style: TextStyle(color: context.muted)),
                     ),
                   );
                 }
@@ -239,4 +355,10 @@ class _MonitoringPageState extends State<MonitoringPage> {
       ),
     );
   }
+}
+
+class _Bar {
+  final String label;
+  final int value;
+  const _Bar(this.label, this.value);
 }

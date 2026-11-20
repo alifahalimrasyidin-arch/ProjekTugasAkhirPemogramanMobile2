@@ -6,21 +6,23 @@ import '../theme/app_theme.dart';
 const String kOtherType = 'Lainnya';
 
 /// Menampilkan popup form tambah tanaman untuk satu kategori.
-void showAddPlantForm(BuildContext context, PlantCategory category) {
+void showAddPlantForm(BuildContext context, PlantCategory category,
+    {String? initialType}) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     builder: (context) => Padding(
       padding:
           EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: AddPlantForm(category: category),
+      child: AddPlantForm(category: category, initialType: initialType),
     ),
   );
 }
 
 class AddPlantForm extends StatefulWidget {
   final PlantCategory category;
-  const AddPlantForm({super.key, required this.category});
+  final String? initialType; // jenis yang sudah terpilih (misalnya dari scanner)
+  const AddPlantForm({super.key, required this.category, this.initialType});
 
   @override
   State<AddPlantForm> createState() => _AddPlantFormState();
@@ -32,6 +34,13 @@ class _AddPlantFormState extends State<AddPlantForm> {
   String? _type;
   bool _withSemai = false;
   String? _typeError;
+
+  @override
+  void initState() {
+    super.initState();
+    _type = widget.initialType;
+    if (_type != null) _nameController.text = _type!;
+  }
 
   @override
   void dispose() {
@@ -100,6 +109,7 @@ class _AddPlantFormState extends State<AddPlantForm> {
             const SizedBox(height: 16),
             DropdownMenu<String>(
               expandedInsets: EdgeInsets.zero, // lebar penuh
+              initialSelection: widget.initialType,
               label: const Text('Jenis tanaman'),
               hintText: 'Pilih atau ketik untuk mencari',
               enableFilter: true, // daftar menyaring saat mengetik
