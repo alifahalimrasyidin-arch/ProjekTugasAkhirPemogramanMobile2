@@ -5,6 +5,9 @@ import '../theme/app_theme.dart';
 import '../data/plant_store.dart';
 import '../data/profile_store.dart';
 import '../services/weather_service.dart';
+import '../models/care_rules.dart';
+import '../widgets/feature_card.dart';
+import '../widgets/garden_hero.dart';
 import 'explore_page.dart';
 import 'login_page.dart';
 import 'monitoring_page.dart';
@@ -407,77 +410,83 @@ class _DashboardPageState extends State<DashboardPage> {
       key: _scaffoldKey,
       backgroundColor: context.bg,
       endDrawer: _settingsDrawer(),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ListenableBuilder(
-                          listenable: profileStore,
-                          builder: (context, _) => Text(
-                            'Hi ${profileStore.name},',
-                            style: TextStyle(color: context.muted),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [context.tint, context.bg],
+            stops: const [0, 0.4],
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ListenableBuilder(
+                            listenable: profileStore,
+                            builder: (context, _) => Text(
+                              'Hi ${profileStore.name},',
+                              style: TextStyle(color: context.muted),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text('Mari kita lihat kebunmu',
-                            style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w800,
-                                color: context.ink)),
-                      ],
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: _showProfileSheet,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: ListenableBuilder(
-                        listenable: profileStore,
-                        builder: (context, _) => _avatar(16),
+                          const SizedBox(height: 2),
+                          Text('Mari kita lihat kebunmu',
+                              style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                  color: context.ink)),
+                        ],
                       ),
                     ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.settings_outlined, color: context.ink),
-                    onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              ListenableBuilder(
-                listenable: plantStore,
-                builder: (context, _) => _weeklyCard(),
-              ),
-              const SizedBox(height: 12),
-              ListenableBuilder(
-                listenable: weatherStore,
-                builder: (context, _) => _weatherTile(),
-              ),
-              const SizedBox(height: 28),
-              Text('Lakukan aktivitasmu',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: context.ink)),
-              const SizedBox(height: 12),
-              _menuTile(Icons.grass, 'Monitoring Kebun',
-                  'Pantau dan kelola semua tanamanmu',
-                  () => MonitoringPage(),
-                  featured: true),
-              _menuTile(Icons.insights_outlined, 'Rekap Kita',
-                  'Lihat perkembangan kebunmu', () => RecapPage()),
-              _menuTile(Icons.explore_outlined, 'Jelajah',
-                  'Pindai tanaman dan belajar berkebun',
-                  () => ExplorePage()),
-            ],
+                    GestureDetector(
+                      onTap: _showProfileSheet,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: ListenableBuilder(
+                          listenable: profileStore,
+                          builder: (context, _) => _avatar(16),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.settings_outlined, color: context.ink),
+                      onPressed: () =>
+                          _scaffoldKey.currentState?.openEndDrawer(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                ListenableBuilder(
+                  listenable: plantStore,
+                  builder: (context, _) => _weeklyCard(),
+                ),
+                const SizedBox(height: 12),
+                ListenableBuilder(
+                  listenable: weatherStore,
+                  builder: (context, _) => _weatherTile(),
+                ),
+                const SizedBox(height: 28),
+                Text('Lakukan aktivitasmu',
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: context.ink)),
+                const SizedBox(height: 12),
+                ListenableBuilder(
+                  listenable: plantStore,
+                  builder: (context, _) => _featureSection(),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -542,17 +551,51 @@ class _DashboardPageState extends State<DashboardPage> {
         icon = Icons.wb_sunny_outlined;
       }
     }
+
+    // Warna latar mengikuti cuaca: biru kalau hujan, kuning kalau panas.
+    final dark = context.isDark;
+    final Color tone;
+    final List<Color> bg;
+    if (w != null && w.rainy) {
+      tone = const Color(0xFF3B82C4);
+      bg = dark
+          ? const [Color(0xFF1B3550), Color(0xFF17283A)]
+          : const [Color(0xFFDDEEFF), Color(0xFFF1F8FF)];
+    } else if (w != null && w.hot) {
+      tone = const Color(0xFFE59A1F);
+      bg = dark
+          ? const [Color(0xFF4A3A16), Color(0xFF2A2212)]
+          : const [Color(0xFFFFEFC9), Color(0xFFFFF9E8)];
+    } else {
+      tone = context.accent;
+      bg = dark
+          ? const [Color(0xFF1F3A2B), Color(0xFF17261E)]
+          : const [Color(0xFFDDF1E3), Color(0xFFF3FAF5)];
+    }
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: context.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.line),
+        gradient: LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: bg,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: tone.withValues(alpha: 0.25)),
       ),
       child: Row(
         children: [
-          Icon(icon, color: context.accent),
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: tone.withValues(alpha: 0.16),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: tone),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -573,142 +616,80 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _weeklyCard() {
-    const letters = ['S', 'S', 'R', 'K', 'J', 'S', 'M'];
     final today = DateTime.now();
     final days = [
       for (var i = 6; i >= 0; i--) today.subtract(Duration(days: i)),
     ];
     final counts = [for (final d in days) plantStore.activityOn(d)];
-    final total = counts.fold<int>(0, (a, b) => a + b);
-
-    String summary;
-    if (plantStore.totalPlantsEver == 0) {
-      summary =
-          'Belum ada tanaman. Tambah tanaman di Monitoring Kebun untuk mulai mencatat.';
-    } else if (total == 0) {
-      summary = 'Belum ada catatan perawatan minggu ini.';
-    } else {
-      summary = '$total catatan perawatan dalam 7 hari terakhir.';
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: context.isDark ? const Color(0xFF1B4331) : AppColors.dark,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('7 hari terakhir',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
-          const SizedBox(height: 8),
-          const Text('Aktivitas kebunmu',
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700)),
-          const SizedBox(height: 18),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              for (var i = 0; i < days.length; i++)
-                Column(
-                  children: [
-                    Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: counts[i] > 0
-                            ? AppColors.primary
-                            : Colors.transparent,
-                        shape: BoxShape.circle,
-                        border: counts[i] > 0
-                            ? null
-                            : Border.all(
-                                color: Colors.white.withValues(alpha: 0.3)),
-                      ),
-                      child: counts[i] > 0
-                          ? const Icon(Icons.check,
-                              size: 18, color: Colors.white)
-                          : null,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(letters[days[i].weekday - 1],
-                        style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.6),
-                            fontSize: 12)),
-                  ],
-                ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Text(
-            summary,
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.85)),
-          ),
-        ],
-      ),
-    );
+    return GardenHero(days: days, counts: counts);
   }
 
-  Widget _menuTile(
-      IconData icon, String title, String subtitle, Widget Function() page,
-      {bool featured = false}) {
-    final fg = featured ? Colors.white : context.ink;
-    final sub = featured ? Colors.white70 : context.muted;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: featured ? AppColors.primary : context.surface,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () => Navigator.push(
-              context, MaterialPageRoute(builder: (context) => page())),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                  color: featured ? AppColors.primary : context.line),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: featured
-                        ? Colors.white.withValues(alpha: 0.18)
-                        : context.tint,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(icon, color: featured ? Colors.white : context.accent),
+  void _open(Widget page) => Navigator.push(
+      context, MaterialPageRoute(builder: (context) => page));
+
+  /// Tiga tombol fitur. Infonya diambil langsung dari data kebun.
+  Widget _featureSection() {
+    final plants = plantStore.plants;
+    final harvestReady = plants.where((p) => p.canHarvest || p.canPick).length;
+    final moveReady = plants.where((p) => p.semaiReady).length;
+
+    return Column(
+      children: [
+        FeatureCard(
+          icon: Icons.grass,
+          title: 'Monitoring Kebun',
+          subtitle: 'Pantau dan kelola semua tanamanmu',
+          colors: const [Color(0xFF1B7448), Color(0xFF47B26F)],
+          chips: [
+            FeatureChip(Icons.spa_outlined,
+                plants.isEmpty ? 'Belum ada tanaman' : '${plants.length} tanaman'),
+            if (harvestReady > 0)
+              FeatureChip(Icons.content_cut, '$harvestReady siap panen'),
+            if (moveReady > 0)
+              FeatureChip(Icons.move_up, '$moveReady siap pindah tanam'),
+          ],
+          onTap: () => _open(MonitoringPage()),
+        ),
+        const SizedBox(height: 14),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: FeatureCard(
+                  compact: true,
+                  icon: Icons.insights_outlined,
+                  title: 'Rekap Kita',
+                  subtitle: 'Lihat perkembangan kebunmu',
+                  colors: const [Color(0xFFFFD670), Color(0xFFF4A63A)],
+                  foreground: const Color(0xFF3A2500),
+                  chips: [
+                    FeatureChip(Icons.edit_note,
+                        '${plantStore.totalCareActions} catatan'),
+                    FeatureChip(Icons.agriculture_outlined,
+                        '${plantStore.totalHarvests} panen'),
+                  ],
+                  onTap: () => _open(RecapPage()),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title,
-                          style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16,
-                              color: fg)),
-                      const SizedBox(height: 2),
-                      Text(subtitle,
-                          style: TextStyle(color: sub, fontSize: 13)),
-                    ],
-                  ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: FeatureCard(
+                  compact: true,
+                  icon: Icons.explore_outlined,
+                  title: 'Jelajah',
+                  subtitle: 'Pindai tanaman dan belajar berkebun',
+                  colors: const [Color(0xFF245F8A), Color(0xFF30A0B4)],
+                  chips: const [
+                    FeatureChip(Icons.auto_awesome, 'Pindai AI'),
+                  ],
+                  onTap: () => _open(ExplorePage()),
                 ),
-                Icon(Icons.chevron_right, color: sub),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
-      ),
+      ],
     );
   }
 }
