@@ -1,6 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../data/plant_store.dart';
+import '../data/profile_store.dart';
+import '../services/auth_service.dart';
+import '../services/account_lookup.dart';
 import '../theme/app_theme.dart';
+import 'dashboard_page.dart';
 import 'login_page.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -14,13 +19,26 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Timer(const Duration(seconds: 3), () {
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginPage()),
-      );
-    });
+    Timer(const Duration(seconds: 3), _next);
+  }
+
+  /// Jika sudah pernah login, muat data lalu langsung ke menu utama.
+  /// Jika belum, buka halaman login.
+  Future<void> _next() async {
+    final user = authService.currentUser;
+    if (user != null) {
+      profileStore.loadFromUser(user);
+      recordProvider(user); // melengkapi catatan untuk akun yang sudah ada
+      await plantStore.load(user.uid);
+    }
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            user != null ? DashboardPage() : const LoginPage(),
+      ),
+    );
   }
 
   @override

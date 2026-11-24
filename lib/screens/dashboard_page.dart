@@ -4,8 +4,11 @@ import 'package:image_picker/image_picker.dart';
 import '../theme/app_theme.dart';
 import '../data/plant_store.dart';
 import '../data/profile_store.dart';
+import '../services/auth_service.dart';
 import '../services/weather_service.dart';
 import '../models/care_rules.dart';
+import '../widgets/app_dialogs.dart';
+import '../widgets/change_password_dialog.dart';
 import '../widgets/feature_card.dart';
 import '../widgets/garden_hero.dart';
 import 'explore_page.dart';
@@ -79,10 +82,12 @@ class _DashboardPageState extends State<DashboardPage> {
               Text(profileStore.email,
                   style: TextStyle(color: context.muted)),
               const SizedBox(height: 16),
-              _sheetTile(Icons.person_outline, 'Ubah data diri',
-                  'Nama dan email', _editProfile),
-              _sheetTile(
-                  Icons.lock_outline, 'Ubah kata sandi', null, _changePassword),
+              _sheetTile(Icons.person_outline, 'Ubah data diri', 'Nama',
+                  _editProfile),
+              // Akun yang hanya masuk lewat Google tidak punya kata sandi.
+              if (authService.hasPassword)
+                _sheetTile(Icons.lock_outline, 'Ubah kata sandi', null,
+                    _changePassword),
               _sheetTile(Icons.logout, 'Keluar', null, _logout, danger: true),
             ],
           ),
@@ -122,7 +127,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _editProfile() async {
     final nameC = TextEditingController(text: profileStore.name);
-    final emailC = TextEditingController(text: profileStore.email);
     final formKey = GlobalKey<FormState>();
 
     final saved = await showDialog<bool>(
@@ -131,24 +135,28 @@ class _DashboardPageState extends State<DashboardPage> {
         title: const Text('Ubah data diri'),
         content: Form(
           key: formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextFormField(
                 controller: nameC,
                 decoration: const InputDecoration(labelText: 'Nama'),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Nama wajib diisi' : null,
+                validator: (v) {
+                  final t = v?.trim() ?? '';
+                  if (t.isEmpty) return 'Nama wajib diisi';
+                  if (t.length < 2) return 'Nama terlalu pendek';
+                  return null;
+                },
               ),
               const SizedBox(height: 12),
               TextFormField(
-                controller: emailC,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: 'Email'),
-                validator: (v) =>
-                    RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v?.trim() ?? '')
-                        ? null
-                        : 'Format email tidak valid',
+                initialValue: profileStore.email,
+                enabled: false,
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  helperText: 'Email tidak dapat diubah',
+                ),
               ),
             ],
           ),
@@ -167,83 +175,38 @@ class _DashboardPageState extends State<DashboardPage> {
         ],
       ),
     );
+    if (saved != true || !mounted) return;
 
-    if (saved == true) {
-      profileStore.updateInfo(
-          name: nameC.text.trim(), email: emailC.text.trim());
-    }
-  }
+    final name = nameC.text.trim();
+    if (name == profileStore.name) return; // tidak ada perubahan
 
-  Future<void> _changePassword() async {
-    final oldC = TextEditingController();
-    final newC = TextEditingController();
-    final confirmC = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Ubah kata sandi'),
-        content: Form(
-          key: formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: oldC,
-                  obscureText: true,
-                  decoration:
-                      const InputDecoration(labelText: 'Kata sandi lama'),
-                  validator: (v) =>
-                      v == profileStore.password ? null : 'Kata sandi lama salah',
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: newC,
-                  obscureText: true,
-                  decoration:
-                      const InputDecoration(labelText: 'Kata sandi baru'),
-                  validator: (v) => (v == null || v.length < 5)
-                      ? 'Minimal 5 karakter'
-                      : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: confirmC,
-                  obscureText: true,
-                  decoration:
-                      const InputDecoration(labelText: 'Ulangi kata sandi baru'),
-                  validator: (v) =>
-                      v == newC.text ? null : 'Kata sandi tidak sama',
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Batal'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) Navigator.pop(context, true);
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
-      ),
+    final yes = await showConfirmDialog(
+      context,
+      icon: Icons.person_outline,
+      title: 'Simpan perubahan?',
+      text: 'Namamu akan diubah menjadi:',
+      content: Text(name,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+      yesLabel: 'Ya, simpan',
     );
+    if (!yes || !mounted) return;
 
-    if (saved == true) {
-      profileStore.changePassword(newC.text);
+    try {
+      await authService.updateName(name);
+      profileStore.setName(name);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kata sandi berhasil diubah.')),
+        const SnackBar(content: Text('Data diri berhasil diperbarui.')),
       );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(authErrorMessage(e))));
     }
   }
+
+  Future<void> _changePassword() => showChangePasswordDialog(context);
 
   Future<void> _logout() async {
     final ok = await showDialog<bool>(
@@ -264,6 +227,10 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     );
     if (ok != true || !mounted) return;
+    await authService.signOut();
+    profileStore.clear();
+    plantStore.clear();
+    if (!mounted) return;
     // Hapus semua halaman dari tumpukan, lalu buka halaman masuk.
     Navigator.pushAndRemoveUntil(
       context,

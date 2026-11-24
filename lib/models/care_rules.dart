@@ -1,10 +1,8 @@
 import 'plant.dart';
-
 /// Cara panen sebuah tipe.
 /// none = tidak dipanen, cutCycle = potong lalu tumbuh lagi (maksimal beberapa kali),
 /// pick = petik buah kapan saja setelah masa pantau dimulai.
 enum HarvestMode { none, cutCycle, pick }
-
 /// Tugas rutin, misalnya siram tiap hari atau pupuk tiap 14 hari.
 /// [fromDay] = tugas baru muncul setelah tanaman berumur sekian hari.
 class RoutineTask {
@@ -14,7 +12,6 @@ class RoutineTask {
   final int fromDay;
   const RoutineTask(this.kind, this.label, this.everyDays, [this.fromDay = 0]);
 }
-
 /// Aturan perawatan satu tipe. Mengubah angka di sini mengubah perilaku
 /// semua tanaman bertipe itu.
 class CareRules {

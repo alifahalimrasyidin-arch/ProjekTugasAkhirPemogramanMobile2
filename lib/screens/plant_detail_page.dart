@@ -240,7 +240,7 @@ class _PlantDetailPageState extends State<PlantDetailPage> {
         const SizedBox(height: 8),
         if (!plant.mustPull)
           ElevatedButton.icon(
-            onPressed: () => plantStore.harvestCut(plant),
+            onPressed: () => _confirmCut(context),
             icon: const Icon(Icons.content_cut),
             label: Text(
                 'Panen potong (${plant.cutCount + 1} dari ${rules.maxCuts})'),
@@ -260,7 +260,7 @@ class _PlantDetailPageState extends State<PlantDetailPage> {
             style: TextStyle(color: context.muted)),
         const SizedBox(height: 8),
         ElevatedButton.icon(
-          onPressed: () => plantStore.pickFruit(plant),
+          onPressed: () => _confirmPick(context),
           icon: const Icon(Icons.shopping_basket_outlined),
           label: const Text('Catat petik buah'),
         ),
@@ -627,6 +627,35 @@ class _PlantDetailPageState extends State<PlantDetailPage> {
     );
     if (ok != true || !mounted) return;
     plantStore.startGrowing(plant);
+  }
+
+  Future<void> _confirmCut(BuildContext context) async {
+    final ok = await _confirmDialog(
+      context,
+      icon: Icons.content_cut,
+      color: AppColors.primary,
+      title: 'Panen potong?',
+      text:
+          'Panen ke-${plant.cutCount + 1} akan dicatat dan tanaman tumbuh lagi.',
+      okLabel: 'Ya, panen',
+      cancelLabel: 'Tidak',
+    );
+    if (ok != true || !mounted) return;
+    plantStore.harvestCut(plant);
+  }
+
+  Future<void> _confirmPick(BuildContext context) async {
+    final ok = await _confirmDialog(
+      context,
+      icon: Icons.shopping_basket_outlined,
+      color: AppColors.primary,
+      title: 'Catat petik buah?',
+      text: 'Satu kali petik buah akan dicatat untuk tanaman ini.',
+      okLabel: 'Ya, catat',
+      cancelLabel: 'Tidak',
+    );
+    if (ok != true || !mounted) return;
+    plantStore.pickFruit(plant);
   }
 
   Future<void> _confirmPull(BuildContext context) async {

@@ -1,21 +1,38 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
-/// Data profil pengguna yang sedang masuk (disimpan di memori).
-/// Akun awal adalah akun uji.
+/// Data profil pengguna yang sedang masuk.
+/// Nama, email, dan foto berasal dari akun Firebase (email atau Google).
 class ProfileStore extends ChangeNotifier {
+  String? uid;
   String name = 'User';
-  String email = 'admin@mail.com';
-  String password = '12345';
-  String? photoPath; // lokasi foto profil di perangkat, null = belum ada
+  String email = '';
+  String? photoUrl; // foto dari akun Google, null untuk akun email
+  String? photoPath; // foto pilihan pengguna di perangkat, null = belum ada
 
-  void updateInfo({required String name, required String email}) {
-    this.name = name;
-    this.email = email;
+  /// Isi profil dari akun Firebase yang baru login.
+  void loadFromUser(User user) {
+    uid = user.uid;
+    name = (user.displayName == null || user.displayName!.trim().isEmpty)
+        ? (user.email?.split('@').first ?? 'User')
+        : user.displayName!;
+    email = user.email ?? '';
+    photoUrl = user.photoURL;
     notifyListeners();
   }
 
-  void changePassword(String newPassword) {
-    password = newPassword;
+  /// Kosongkan profil saat keluar.
+  void clear() {
+    uid = null;
+    name = 'User';
+    email = '';
+    photoUrl = null;
+    photoPath = null;
+    notifyListeners();
+  }
+
+  void setName(String newName) {
+    name = newName;
     notifyListeners();
   }
 

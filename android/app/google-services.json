@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "741606540462",
+    "project_id": "cebun-ab1c7",
+    "storage_bucket": "cebun-ab1c7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:741606540462:android:e9bb004acc0b576ab8993f",
+        "android_client_info": {
+          "package_name": "com.example.plant_monitoring"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "741606540462-356j0b36jqma38jc63ur45sqhr3okhn4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.plant_monitoring",
+            "certificate_hash": "f8c2f19a2c6a4dfd0db5bf7c4d6e1fe59b8c47be"
+          }
+        },
+        {
+          "client_id": "741606540462-p6s21sehle8qife0gpocm5gstb4uv4o9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDtAfEy30kWVr9eqUXPowP6oMwhdyn-2iE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "741606540462-p6s21sehle8qife0gpocm5gstb4uv4o9.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

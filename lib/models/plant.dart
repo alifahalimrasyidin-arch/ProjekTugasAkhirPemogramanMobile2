@@ -198,13 +198,29 @@ class CareLog {
   final CareKind kind;
   final DateTime at;
   CareLog(this.kind, [DateTime? at]) : at = at ?? DateTime.now();
+
+  Map<String, dynamic> toMap() =>
+      {'kind': kind.name, 'at': at.millisecondsSinceEpoch};
+
+  factory CareLog.fromMap(Map<String, dynamic> m) => CareLog(
+        CareKind.values.byName(m['kind'] as String),
+        DateTime.fromMillisecondsSinceEpoch((m['at'] as num).toInt()),
+      );
 }
 
 /// Catatan bebas dari user.
 class PlantNote {
   final String text;
   final DateTime at;
-  PlantNote(this.text) : at = DateTime.now();
+  PlantNote(this.text, [DateTime? at]) : at = at ?? DateTime.now();
+
+  Map<String, dynamic> toMap() =>
+      {'text': text, 'at': at.millisecondsSinceEpoch};
+
+  factory PlantNote.fromMap(Map<String, dynamic> m) => PlantNote(
+        m['text'] as String,
+        DateTime.fromMillisecondsSinceEpoch((m['at'] as num).toInt()),
+      );
 }
 
 /// Tanaman milik user yang tampil sebagai card di Monitoring Kebun.
@@ -227,6 +243,7 @@ class Plant {
   final List<String> photoPaths = [];
 
   Plant({
+    String? id,
     required this.name,
     required this.type,
     required this.category,
@@ -234,8 +251,60 @@ class Plant {
     this.isCustom = false,
     this.withSemai = false,
     DateTime? plantedAt,
-  })  : id = DateTime.now().microsecondsSinceEpoch.toString(),
+  })  : id = id ?? DateTime.now().microsecondsSinceEpoch.toString(),
         plantedAt = plantedAt ?? DateTime.now() {
     stageStart = this.plantedAt;
+  }
+
+  /// Ubah ke Map agar bisa disimpan di Firestore.
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'name': name,
+        'type': type,
+        'category': category.name,
+        'careType': careType?.name,
+        'isCustom': isCustom,
+        'plantedAt': plantedAt.millisecondsSinceEpoch,
+        'withSemai': withSemai,
+        'stage': stage.name,
+        'stageStart': stageStart.millisecondsSinceEpoch,
+        'cutCount': cutCount,
+        'lastCutAt': lastCutAt?.millisecondsSinceEpoch,
+        'logs': logs.map((l) => l.toMap()).toList(),
+        'notes': notes.map((n) => n.toMap()).toList(),
+        'photoPaths': photoPaths,
+      };
+
+  /// Bangun kembali objek Plant dari data Firestore.
+  factory Plant.fromMap(Map<String, dynamic> m) {
+    DateTime ms(Object? v) =>
+        DateTime.fromMillisecondsSinceEpoch((v as num).toInt());
+
+    final careName = m['careType'] as String?;
+    final plant = Plant(
+      id: m['id'] as String,
+      name: m['name'] as String,
+      type: m['type'] as String,
+      category: PlantCategory.values.byName(m['category'] as String),
+      careType: careName == null ? null : CareType.values.byName(careName),
+      isCustom: m['isCustom'] as bool? ?? false,
+      withSemai: m['withSemai'] as bool? ?? false,
+      plantedAt: ms(m['plantedAt']),
+    );
+    plant.stage =
+        PlantStage.values.byName(m['stage'] as String? ?? PlantStage.tumbuh.name);
+    plant.stageStart = ms(m['stageStart'] ?? m['plantedAt']);
+    plant.cutCount = (m['cutCount'] as num?)?.toInt() ?? 0;
+    plant.lastCutAt = m['lastCutAt'] == null ? null : ms(m['lastCutAt']);
+    for (final e in (m['logs'] as List?) ?? const []) {
+      plant.logs.add(CareLog.fromMap(Map<String, dynamic>.from(e as Map)));
+    }
+    for (final e in (m['notes'] as List?) ?? const []) {
+      plant.notes.add(PlantNote.fromMap(Map<String, dynamic>.from(e as Map)));
+    }
+    for (final e in (m['photoPaths'] as List?) ?? const []) {
+      plant.photoPaths.add(e as String);
+    }
+    return plant;
   }
 }

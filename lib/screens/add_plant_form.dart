@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../data/plant_store.dart';
 import '../models/plant.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_dialogs.dart';
 
 const String kOtherType = 'Lainnya';
 
@@ -48,7 +49,7 @@ class _AddPlantFormState extends State<AddPlantForm> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final nameOk = _formKey.currentState!.validate();
     setState(() {
       _typeError = _type == null ? 'Pilih jenis tanaman dulu' : null;
@@ -64,6 +65,17 @@ class _AddPlantFormState extends State<AddPlantForm> {
       );
       return;
     }
+
+    // Konfirmasi sebelum tanaman ditambahkan.
+    final yes = await showConfirmDialog(
+      context,
+      icon: Icons.add_circle_outline,
+      title: 'Tambah tanaman?',
+      text:
+          '${_nameController.text.trim()} ($_type) akan ditambahkan ke ${widget.category.label.toLowerCase()}.',
+      yesLabel: 'Ya, tambah',
+    );
+    if (!yes || !mounted) return;
 
     plantStore.add(Plant(
       name: _nameController.text.trim(),
